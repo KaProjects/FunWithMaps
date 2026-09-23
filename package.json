@@ -1,0 +1,55 @@
+{
+  "name": "timeline-map",
+  "productName": "Timeline Map",
+  "version": "0.1.0",
+  "description": "Plot your Google Maps Timeline export on your own map.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^40.0.0",
+    "electron-builder": "^25.1.8",
+    "maplibre-gl": "^5.6.0"
+  },
+  "build": {
+    "appId": "dev.local.timeline-map",
+    "files": [
+      "main.js",
+      "preload.js",
+      "parse.js",
+      "renderer/**/*"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "arm64"
+          ]
+        },
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.travel",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    }
+  }
+}
