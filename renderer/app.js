@@ -24,10 +24,11 @@ let size = 1;
 // null | 'tiered' (reveals whole administrative regions) | 'wide' (100km circles).
 // Both draw the same parchment, lettering and two-weight borders.
 let fogMode = null;
-let fogCounts = { kept: 0, total: 0 };
 let fogSizes = { all: 0 };
 let baseStatus = '';
 let fogLayer = null;
+let labelsOn = true;
+let symbolLayers = [];   // [{ id, original }] captured fresh from each style
 let regionMesh = null;   // 'pending' while loading, then the uploaded Float32Array
 let regionCount = 0;
 let regionBorders = null;
@@ -46,7 +47,6 @@ const REGION_MODES = new Set(['tiered']);
 const SMALL_COUNTRY_KM2 = 30000;
 // How far a revealed coastal region reaches out over the water.
 const SEA_MARGIN_M = 50000;
-const NOISE_RADIUS_M = 5000;
 const LINK_DISTANCE_M = 20000;  // bridge visits at least this close together
 const LINK_STEP_M = 6000;       // spacing of the filler points along a bridge
 const MAX_LINKS = 6;            // per site, nearest first
@@ -91,6 +91,8 @@ let projection = 'mercator';
 
 map.on('style.load', () => {
   styleReady = true;
+  captureLabels();
+  applyLabels();
   addLayers();
   fitOnce();
   // A style load resets the projection, so re-assert the user's choice.
@@ -99,6 +101,27 @@ map.on('style.load', () => {
   // buried under the label layers. Re-assert the order once the style settles.
   map.once('idle', raiseOverlays);
 });
+
+/**
+ * Note each style's own idea of which place-name layers should be drawn, so the
+ * toggle can put things back exactly as the style intended rather than turning
+ * on labels the style deliberately suppresses (AOE hides road and POI names).
+ */
+function captureLabels() {
+  symbolLayers = map.getStyle().layers
+    .filter((layer) => layer.type === 'symbol')
+    .map((layer) => ({
+      id: layer.id,
+      original: (layer.layout && layer.layout.visibility) || 'visible',
+    }));
+}
+
+function applyLabels() {
+  for (const { id, original } of symbolLayers) {
+    if (!map.getLayer(id)) continue;
+    map.setLayoutProperty(id, 'visibility', labelsOn ? original : 'none');
+  }
+}
 
 /** Keep the fog above the basemap, and the dots above the fog. */
 function raiseOverlays() {
@@ -198,8 +221,6 @@ function ringKm2(ring) {
  * Work out which administrative regions hold at least one visit, then hand back
  * a triangulated mesh of them in Mercator space.
  *
- * Visits are matched against the denoised set rather than every fix: at this
- * granularity a single stray GPS reading would light up an entire province.
  */
 function regionIndex(regions) {
   // Bucket regions by whole degree so each lookup tests only a few candidates.
@@ -460,8 +481,26 @@ el('size').addEventListener('input', (e) => {
   applySize();
 });
 
-el('basemap').addEventListener('change', (e) => {
-  map.setStyle(styleUrl(e.target.value));
+// The AOE basemap is the Detailed one recoloured, so it is fetched once and
+// rewritten rather than shipped as a second style document.
+let aoeStyle = null;
+
+async function styleFor(name) {
+  if (name !== 'aoe') return styleUrl(name);
+  if (!aoeStyle) {
+    const base = await (await fetch(styleUrl('liberty'))).json();
+    aoeStyle = buildAoeStyle(base);
+  }
+  return aoeStyle;
+}
+
+el('labels').addEventListener('change', (e) => {
+  labelsOn = e.target.checked;
+  applyLabels();
+});
+
+el('basemap').addEventListener('change', async (e) => {
+  map.setStyle(await styleFor(e.target.value));
 });
 
 /**
@@ -469,9 +508,10 @@ el('basemap').addEventListener('change', (e) => {
  * can be on at a time.
  */
 function setFogMode(mode) {
-  // At this radius the dots are just noise over the revealed regions, so turning
-  // the sheet on clears them -- by unchecking the boxes rather than overriding
-  // them, so they can be switched straight back on.
+  // The sheet is driven by places visited, so that layer stays on and the rest
+  // come off -- the breadcrumb trails are just noise at this scale. Done by
+  // setting the boxes rather than overriding them, so any of it can be switched
+  // straight back on.
   const turningOn = mode && !fogMode;
 
   fogMode = mode;
@@ -480,7 +520,7 @@ function setFogMode(mode) {
   el('reveal-row').hidden = !mode || REGION_MODES.has(mode);
 
   if (turningOn) {
-    for (const kind of KINDS) el(`chk-${kind.id}`).checked = false;
+    for (const kind of KINDS) el(`chk-${kind.id}`).checked = kind.id === 'visit';
   }
   if (mode && REVEAL_DEFAULTS[mode]) {
     // Each variant has its own reach, so re-seed the slider when switching.
@@ -568,53 +608,6 @@ map.on('mouseenter', 'pts-visit', () => { map.getCanvas().style.cursor = 'pointe
 map.on('mouseleave', 'pts-visit', () => { map.getCanvas().style.cursor = ''; });
 
 /* ---------- data ---------- */
-
-/**
- * Drop isolated visits. A place with no other visit within `radius` is almost
- * always a stray fix — a bad GPS lock, or a point picked up in passing — rather
- * than somewhere you actually spent time. Bucketed into a grid so this stays
- * linear instead of comparing every visit against every other one.
- *
- * Note this also drops a genuine one-off: a trip where you visited exactly one
- * place and nothing else nearby disappears too.
- */
-function denoise(lats, lngs, radius) {
-  const cell = radius / 111320; // grid step, in degrees of latitude
-  const buckets = new Map();
-  for (let i = 0; i < lats.length; i++) {
-    const key = `${Math.floor(lats[i] / cell)},${Math.floor(lngs[i] / cell)}`;
-    let bucket = buckets.get(key);
-    if (!bucket) buckets.set(key, (bucket = []));
-    bucket.push(i);
-  }
-
-  const keep = [];
-  const limit = radius * radius;
-  for (let i = 0; i < lats.length; i++) {
-    const row = Math.floor(lats[i] / cell);
-    const col = Math.floor(lngs[i] / cell);
-    // A cell is `radius` tall but narrower than that in metres as you move away
-    // from the equator, so widen the column search to compensate.
-    const cosLat = Math.max(0.05, Math.cos((lats[i] * Math.PI) / 180));
-    const span = Math.min(8, Math.ceil(1 / cosLat));
-
-    let found = false;
-    for (let dr = -1; dr <= 1 && !found; dr++) {
-      for (let dc = -span; dc <= span && !found; dc++) {
-        const bucket = buckets.get(`${row + dr},${col + dc}`);
-        if (!bucket) continue;
-        for (const j of bucket) {
-          if (j === i) continue;
-          const dy = (lats[j] - lats[i]) * 110540;
-          const dx = (lngs[j] - lngs[i]) * 111320 * cosLat;
-          if (dx * dx + dy * dy <= limit) { found = true; break; }
-        }
-      }
-    }
-    if (found) keep.push(i);
-  }
-  return keep;
-}
 
 /**
  * Fill the waist between neighbouring visits. Two discs whose centres are
@@ -713,8 +706,7 @@ function buildCollections(payload) {
     }
   }
 
-  // Bridge the gaps, then project. Done twice: once over the denoised visits,
-  // and once over every visit, so the two variants can be compared directly.
+  // Bridge the gaps, then project.
   const buildSet = (lats, lngs) => {
     const { extraLat, extraLng } = bridge(
       lats, lngs, LINK_DISTANCE_M, LINK_STEP_M, MAX_LINKS);
@@ -729,12 +721,10 @@ function buildCollections(payload) {
     return out;
   };
 
-  const clustered = denoise(visitLat, visitLng, NOISE_RADIUS_M);
-  regionLat = clustered.map((i) => visitLat[i]);
-  regionLng = clustered.map((i) => visitLng[i]);
+  regionLat = visitLat;
+  regionLng = visitLng;
   fogSets = { all: buildSet(visitLat, visitLng) };
   fogSizes = { all: fogSets.all.length / 2 };
-  fogCounts = { kept: clustered.length, total: visitLat.length };
 
   bounds = new maplibregl.LngLatBounds([minLng, minLat], [maxLng, maxLat]);
   return out;
@@ -752,8 +742,7 @@ function show(payload) {
   splash.hidden = true;
   panel.hidden = false;
   el('total').textContent = `${nf.format(payload.total)} GPS points`;
-  baseStatus = `${payload.file.split(/[/\\]/).pop()} · parsed in ${payload.ms} ms`
-    + ` · ${nf.format(fogCounts.kept)}/${nf.format(fogCounts.total)} visits clustered`;
+  baseStatus = `${payload.file.split(/[/\\]/).pop()} · parsed in ${payload.ms} ms`;
   showStatus();
 }
 
