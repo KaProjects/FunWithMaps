@@ -89,6 +89,17 @@ ipcMain.handle('timeline:load', (_e, explicitPath) => {
   }
 });
 
+// The region file ships with the app, so it resolves against the app path in
+// both development and a packaged build (asar reads transparently).
+ipcMain.handle('regions:load', () => {
+  const file = path.join(app.getAppPath(), 'data', 'regions.json');
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (err) {
+    return { error: 'regions', message: err.message };
+  }
+});
+
 ipcMain.handle('timeline:pick', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(win, {
     title: 'Choose your Timeline export',

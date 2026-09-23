@@ -22,7 +22,8 @@
       "main.js",
       "preload.js",
       "parse.js",
-      "renderer/**/*"
+      "renderer/**/*",
+      "data/**/*"
     ],
     "mac": {
       "target": [
@@ -51,5 +52,8 @@
       ],
       "category": "Utility"
     }
+  },
+  "dependencies": {
+    "earcut": "^3.2.3"
   }
 }

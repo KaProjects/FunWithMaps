@@ -43,6 +43,35 @@ html, body {
   z-index: 10;
 }
 
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle {
+  flex: none;
+  min-width: 0;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0;
+  line-height: 1;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.toggle:hover { color: var(--text); }
+
+/* Collapsed: shrink to just the toggle so the map has the room. */
+#panel.collapsed {
+  width: auto;
+  padding: 8px;
+}
+
+#panel.collapsed h1,
+#panel.collapsed .panel-body { display: none; }
+
 h1 {
   margin: 0 0 2px;
   font-size: 14px;
@@ -85,6 +114,10 @@ fieldset label .count { margin-left: auto; color: var(--muted); font-variant-num
   gap: 10px;
   margin-bottom: 9px;
 }
+
+/* An element-level display beats the user-agent rule for [hidden], so the
+   attribute has to be honoured explicitly. */
+.row[hidden] { display: none; }
 
 .row > span { color: var(--muted); flex: none; width: 64px; }
 .row input[type="range"] { flex: 1; accent-color: var(--dot); }
