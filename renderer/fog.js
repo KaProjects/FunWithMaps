@@ -103,8 +103,7 @@ void main() {
   gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0 - smoothstep(0.55, 1.0, length(v_corner)));
 }`;
 
-// Region polygons, already triangulated, in Mercator space. No per-instance
-// expansion -- the vertices are the shape.
+// Plain Mercator vertices, used for the border lines traced onto the sheet.
 const VERT_MESH = `
 attribute vec2 a_pos;
 uniform mat4 u_matrix;
@@ -251,8 +250,6 @@ function compile(gl, vertSrc, fragSrc) {
 function createFogLayer({ sets, active, radiusMeters, borders }) {
   let pointProgram, quadProgram, patternProgram, meshProgram;
   let cornerBuffer, quadBuffer, pattern;
-  const meshes = Object.create(null);   // name -> { buffer, count }
-  const pending = Object.create(null);  // name -> Float32Array awaiting upload
   const borderBuffers = { region: null, country: null };
   const borderCounts = { region: 0, country: 0 };
   let pendingBorders = null;
@@ -323,11 +320,6 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
     type: 'custom',
     renderingMode: '2d',
 
-    /** Hand the layer a triangulated region mesh, in Mercator coordinates. */
-    setMesh(name, vertices) {
-      pending[name] = vertices;
-    },
-
     /** Outlines as GL_LINES vertex pairs, keyed 'region' and 'country'. */
     setBorders(lines) {
       pendingBorders = lines;
@@ -385,7 +377,6 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
         gl.deleteBuffer(g.buffer);
         gl.deleteVertexArray(g.vao);
       }
-      for (const m of Object.values(meshes)) gl.deleteBuffer(m.buffer);
       for (const key of ['region', 'country']) {
         if (borderBuffers[key]) gl.deleteBuffer(borderBuffers[key]);
         borderBuffers[key] = null;
@@ -404,16 +395,6 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
     render(gl, args) {
       if (!supported) return;
 
-      // Meshes arrive after the layer is live (the region file loads lazily),
-      // so upload anything queued now that a GL context is in hand.
-      for (const [name, data] of Object.entries(pending)) {
-        delete pending[name];
-        if (!meshes[name]) meshes[name] = { buffer: gl.createBuffer(), count: 0 };
-        gl.bindBuffer(gl.ARRAY_BUFFER, meshes[name].buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-        meshes[name].count = data.length / 2;
-      }
-
       if (pendingBorders) {
         for (const key of ['region', 'country']) {
           const data = pendingBorders[key];
@@ -426,10 +407,8 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
         pendingBorders = null;
       }
 
-      const name = active();
-      const set = geometry[name];
-      const mesh = meshes[name];
-      if (!(set && set.count) && !(mesh && mesh.count)) return;
+      const set = geometry[active()];
+      if (!set || !set.count) return;
       // mainMatrix assumes mercator; under a globe the points would land wrong.
       if ((map.getProjection() || {}).type === 'globe') return;
 
@@ -459,17 +438,6 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
       const view = viewport();
       const radius = radiusMeters() / EQUATOR_METRES;
       const drawHoles = () => {
-        if (mesh && mesh.count) {
-          gl.useProgram(meshProgram);
-          gl.uniformMatrix4fv(gl.getUniformLocation(meshProgram, 'u_matrix'), false, matrix);
-          gl.uniform4f(gl.getUniformLocation(meshProgram, 'u_color'), 0, 0, 0, 1);
-          const aMesh = gl.getAttribLocation(meshProgram, 'a_pos');
-          gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buffer);
-          gl.enableVertexAttribArray(aMesh);
-          gl.vertexAttribPointer(aMesh, 2, gl.FLOAT, false, 0, 0);
-          gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
-          return;
-        }
         gl.useProgram(pointProgram);
         gl.uniformMatrix4fv(gl.getUniformLocation(pointProgram, 'u_matrix'), false, matrix);
         gl.uniform1f(gl.getUniformLocation(pointProgram, 'u_radius'), radius);

@@ -30,16 +30,29 @@ function findTimeline() {
   return null;
 }
 
+/** Optional side files: bad fixes to drop, and visits Google missed. */
+function sidecar(name) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'data', name), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 function load(file) {
   console.log(`[timeline] reading ${file}`);
   const started = Date.now();
   const doc = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const pts = extractPoints(doc);
+  const pts = extractPoints(doc, sidecar('exclusions.json'), sidecar('additions.json'));
+  if (pts.dropped) console.log(`[timeline] excluded ${pts.dropped} points`);
+  if (pts.added) console.log(`[timeline] added ${pts.added} points`);
   if (!pts.total) throw new Error('No GPS points found in that file.');
   return {
     file,
     counts: pts.counts,
     total: pts.total,
+    dropped: pts.dropped,
+    added: pts.added,
     ms: Date.now() - started,
     // Transferred as ArrayBuffers via structured clone -- cheap even at 250k points.
     lat: pts.lat.buffer,
@@ -89,8 +102,9 @@ ipcMain.handle('timeline:load', (_e, explicitPath) => {
   }
 });
 
-// The region file ships with the app, so it resolves against the app path in
-// both development and a packaged build (asar reads transparently).
+// Administrative boundaries, used only to trace borders onto the fog. Ships
+// with the app, so it resolves against the app path in both development and a
+// packaged build (asar reads transparently).
 ipcMain.handle('regions:load', () => {
   const file = path.join(app.getAppPath(), 'data', 'regions.json');
   try {

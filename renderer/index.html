@@ -49,18 +49,13 @@
     </label>
 
     <label class="row check">
-      <input id="fog4" type="checkbox" />
-      <span>Terra incognita 4</span>
+      <input id="fog" type="checkbox" />
+      <span>Terra incognita</span>
     </label>
-
-    <label class="row check">
-      <input id="fog6" type="checkbox" />
-      <span>Terra incognita 6</span>
-    </label>
-
     <label class="row" id="reveal-row" hidden>
       <span>Reveal</span>
       <input id="reveal" type="range" min="200" max="100000" step="200" value="20000" />
+      <output id="reveal-value" class="value">20 km</output>
     </label>
 
     <label class="row check">
@@ -88,7 +83,6 @@
   </div>
 
   <script src="vendor/maplibre-gl.js"></script>
-  <script src="vendor/earcut.min.js"></script>
   <script src="basemaps.js"></script>
   <script src="fog.js"></script>
   <script src="app.js"></script>

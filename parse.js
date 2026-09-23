@@ -22,19 +22,51 @@ function time(raw) {
   return Number.isFinite(t) ? t : 0;
 }
 
+/**
+ * Build a test for points the user has marked as bad data. Google's export
+ * carries the occasional fix in open sea, or a straight line drawn between two
+ * real positions; those are listed in data/exclusions.json rather than edited
+ * out of Timeline.json, so the original export stays untouched and the list
+ * survives re-exporting.
+ */
+function makeExcluder(exclusions) {
+  const points = (exclusions && exclusions.points) || [];
+  if (!points.length) return () => false;
+  const fallback = (exclusions && exclusions.radius) || 50;
+
+  return (lat, lng) => {
+    for (const point of points) {
+      const radius = point.radius || fallback;
+      const dy = (lat - point.lat) * 110540;
+      const dx = (lng - point.lng) * 111320 * Math.cos((lat * Math.PI) / 180);
+      if (dx * dx + dy * dy <= radius * radius) return true;
+    }
+    return false;
+  };
+}
+
 // Kind codes, kept in sync with KINDS in renderer/app.js.
 const PATH = 0, VISIT = 1, ACTIVITY = 2, RAW = 3;
+const KIND_NAMES = { path: PATH, visit: VISIT, activity: ACTIVITY, raw: RAW };
+const KIND_BUCKETS = ['path', 'visit', 'activity', 'raw'];
 
 /**
  * Pull every GPS point out of a parsed Timeline.json.
  * Returns flat typed arrays so the payload can cross the IPC boundary
  * as a handful of ArrayBuffers instead of 250k plain objects.
  */
-function extractPoints(doc) {
+function extractPoints(doc, exclusions, additions) {
   const lat = [], lng = [], kind = [], t = [];
   const counts = { path: 0, visit: 0, activity: 0, raw: 0 };
+  const excluded = makeExcluder(exclusions);
+  let dropped = 0;
+  let added = 0;
 
   const push = (ll, k, ts, bucket) => {
+    if (excluded(ll[0], ll[1])) {
+      dropped++;
+      return;
+    }
     lat.push(ll[0]);
     lng.push(ll[1]);
     kind.push(k);
@@ -64,6 +96,20 @@ function extractPoints(doc) {
     }
   }
 
+  // Places Google missed. Appended after the filtering above, so an addition is
+  // never silently dropped by an exclusion.
+  for (const point of (additions && additions.points) || []) {
+    const ll = latLng(`${point.lat}, ${point.lng}`);
+    if (!ll) continue;
+    const k = KIND_NAMES[point.kind] !== undefined ? KIND_NAMES[point.kind] : VISIT;
+    lat.push(ll[0]);
+    lng.push(ll[1]);
+    kind.push(k);
+    t.push(time(point.time));
+    counts[KIND_BUCKETS[k]]++;
+    added++;
+  }
+
   for (const sig of doc.rawSignals || []) {
     // Capitalised "LatLng" here, lowercase "latLng" in semanticSegments. Thanks, Google.
     const pos = sig.position;
@@ -79,6 +125,8 @@ function extractPoints(doc) {
     time: new Float64Array(t),
     counts,
     total: lat.length,
+    dropped,
+    added,
   };
 }
 

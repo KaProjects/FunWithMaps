@@ -52,8 +52,5 @@
       ],
       "category": "Utility"
     }
-  },
-  "dependencies": {
-    "earcut": "^3.2.3"
   }
 }

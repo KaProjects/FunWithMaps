@@ -1,0 +1,251 @@
+{
+  "_comment": "GPS fixes to ignore. Each entry drops any point within `radius` metres (default 500) -- a bad reading is usually a small scatter of points rather than a single one, so the radius has to cover the cluster, not just the coordinate you read off the map. Set `radius` on an individual entry to override. Timeline.json is never modified.",
+  "radius": 500,
+  "points": [
+    {
+      "lat": 51.47689,
+      "lng": -5.00187,
+      "note": "2021-09-12 visit, open sea west of Wales"
+    },
+    {
+      "lat": 51.21032,
+      "lng": 3.21796,
+      "note": "2018-07-06 visit, North Sea off Belgium"
+    },
+    {
+      "lat": 42.82613,
+      "lng": 9.41172,
+      "note": "2022-06-23 visit, Tyrrhenian Sea east of Corsica"
+    },
+    {
+      "lat": 46.64932,
+      "lng": 18.50801,
+      "note": "2019-09-27 path, Balkan straight line"
+    },
+    {
+      "lat": 45.99637,
+      "lng": 18.92086,
+      "note": "2019-09-27 path, Balkan straight line"
+    },
+    {
+      "lat": 45.35009,
+      "lng": 19.38207,
+      "note": "2019-09-27 path, Balkan straight line"
+    },
+    {
+      "lat": 44.69602,
+      "lng": 19.8356,
+      "note": "2019-09-27 path, Balkan straight line"
+    },
+    {
+      "lat": 44.09967,
+      "lng": 20.24094,
+      "note": "2019-09-27 path, Balkan straight line"
+    },
+    {
+      "lat": 42.33368,
+      "lng": 21.38351,
+      "note": "2019-09-28 path, Balkan straight line"
+    },
+    {
+      "lat": 46.07359,
+      "lng": 18.21585,
+      "note": "2018-07-06 path, stray near Pecs"
+    },
+    {
+      "lat": 47.0756,
+      "lng": 20.48109,
+      "note": "2017-07-09 path, Szolnok cluster"
+    },
+    {
+      "lat": 47.07551,
+      "lng": 20.47906,
+      "note": "2017-07-08 trip end, Szolnok cluster"
+    },
+    {
+      "lat": 47.17673,
+      "lng": 20.19164,
+      "note": "2017-07-08 path, Szolnok cluster"
+    },
+    {
+      "lat": 47.17677,
+      "lng": 20.19164,
+      "note": "2017-07-08 trip end, Szolnok cluster"
+    },
+    {
+      "lat": 47.1773,
+      "lng": 20.19117,
+      "note": "2017-07-08 trip end, Szolnok cluster"
+    },
+    {
+      "lat": 47.1773,
+      "lng": 20.19123,
+      "note": "2017-07-08 visit, Szolnok cluster"
+    },
+    {
+      "lat": 47.17726,
+      "lng": 20.19125,
+      "note": "2017-07-08 visit, Szolnok cluster"
+    },
+    {
+      "lat": 52.0121,
+      "lng": 12.32786,
+      "note": "2019-08-04 trip end, stray near Wittenberg"
+    },
+    {
+      "lat": 51.75467,
+      "lng": 8.3709,
+      "note": "2019-05-07 path, stray near Paderborn"
+    },
+    {
+      "lat": 46.2545,
+      "lng": 20.13852,
+      "note": "2017-07-08 path, stray near Szeged"
+    },
+    {
+      "lat": 46.2657,
+      "lng": 20.12854,
+      "note": "2017-07-08 path, stray near Szeged"
+    },
+    {
+      "lat": 51.21034,
+      "lng": 3.21722,
+      "note": "2018-07-06 trip end, North Sea off Belgium"
+    },
+    {
+      "lat": 50.33971,
+      "lng": 12.69736,
+      "note": "2018-08-05 path, stray on the Saxon border"
+    },
+    {
+      "lat": 44.2638,
+      "lng": 16.28612,
+      "note": "2016-07-17 trip end, inland Croatia stray"
+    },
+    {
+      "lat": 15.68767,
+      "lng": 120.81099,
+      "note": "2026-04-02 path, Luzon"
+    },
+    {
+      "lat": 15.79192,
+      "lng": 120.76567,
+      "note": "2026-04-02 path, Luzon"
+    },
+    {
+      "lat": 13.32348,
+      "lng": 121.15826,
+      "note": "2026-03-29 path, Mindoro"
+    },
+    {
+      "lat": 12.7733,
+      "lng": 121.78585,
+      "note": "2026-04-02 path, Mindoro"
+    },
+    {
+      "lat": 19.11987,
+      "lng": 117.68692,
+      "note": "2026-04-02 path, South China Sea"
+    },
+    {
+      "lat": 19.53326,
+      "lng": 117.21245,
+      "note": "2026-04-02 path, South China Sea"
+    },
+    {
+      "lat": 20.50775,
+      "lng": 115.63797,
+      "note": "2026-04-02 path, South China Sea"
+    },
+    {
+      "lat": 43.54049,
+      "lng": 4.96058,
+      "note": "2022-06-27 trip end, Golfe du Lion"
+    },
+    {
+      "lat": 42.44879,
+      "lng": 4.11369,
+      "note": "2022-07-12 path, Balearic Sea"
+    },
+    {
+      "lat": 41.73614,
+      "lng": 2.94897,
+      "note": "2022-06-26 path, off Catalonia"
+    },
+    {
+      "lat": 41.6806,
+      "lng": 2.51857,
+      "note": "2022-07-13 path, off Catalonia"
+    },
+    {
+      "lat": 41.66833,
+      "lng": 2.4872,
+      "note": "2022-07-13 path, off Catalonia"
+    },
+    {
+      "lat": 54.74999,
+      "lng": 20.48676,
+      "note": "2019-08-24 trip end, Baltic off Kaliningrad"
+    },
+    {
+      "lat": 59.2743,
+      "lng": 10.4068,
+      "note": "2018-08-05 trip end, Oslofjord"
+    },
+    {
+      "lat": 42.97478,
+      "lng": 9.37477,
+      "note": "2022-06-24 trip end, sea east of Corsica"
+    },
+    {
+      "lat": 54.74999,
+      "lng": 20.48401,
+      "note": "2019-08-24 trip end, Baltic off Kaliningrad"
+    },
+    {
+      "lat": 59.2743,
+      "lng": 10.40405,
+      "note": "2018-08-05 trip end, Oslofjord"
+    },
+    {
+      "lat": 38.83543,
+      "lng": -4.54285,
+      "note": "2025-07-29 path, stray in central Spain"
+    },
+    {
+      "lat": 14.21784,
+      "lng": 121.05616,
+      "note": "2026-04-02 path, Laguna"
+    },
+    {
+      "lat": 14.25511,
+      "lng": 120.94544,
+      "note": "2026-04-02 path, Cavite"
+    },
+    {
+      "lat": 14.46397,
+      "lng": 120.93965,
+      "note": "2026-04-02 path, Manila Bay"
+    },
+    {
+      "lat": 41.57577,
+      "lng": 8.94991,
+      "note": "2022-06-27 path, sea south of Corsica"
+    },
+    {
+      "lat": 41.89239,
+      "lng": 8.80509,
+      "note": "2022-06-27 path, Gulf of Ajaccio"
+    },
+    {
+      "lat": 41.90825,
+      "lng": 8.81509,
+      "note": "2022-06-27 trip end, Gulf of Ajaccio"
+    },
+    {
+      "lat": 41.92768,
+      "lng": 8.77859,
+      "note": "2022-06-27 path, Gulf of Ajaccio"
+    }
+  ]
+}

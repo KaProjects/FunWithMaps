@@ -119,8 +119,24 @@ fieldset label .count { margin-left: auto; color: var(--muted); font-variant-num
    attribute has to be honoured explicitly. */
 .row[hidden] { display: none; }
 
+/* Fixed width and no wrapping: the readout changes on every drag, and anything
+   that can reflow makes the whole panel jump while the slider moves. */
+.value {
+  flex: none;
+  width: 46px;
+  overflow: hidden;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .row > span { color: var(--muted); flex: none; width: 64px; }
-.row input[type="range"] { flex: 1; accent-color: var(--dot); }
+/* min-width:0 is what keeps the slider from refusing to shrink: a flex item
+   defaults to min-width:auto, so the range would hold its intrinsic width and
+   shove the readout outside the panel. */
+.row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--dot); }
 .row.check { gap: 7px; }
 .row.check > span { width: auto; }
 
