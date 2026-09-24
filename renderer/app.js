@@ -28,6 +28,7 @@ let fogLayer = null;
 let labelsOn = true;
 let symbolLayers = [];   // [{ id, original }] captured fresh from each style
 let regionBorders = null;
+let regionsCache = null;   // parsed data/regions.json, fetched at most once
 
 let revealMeters = 50000;
 
@@ -285,6 +286,38 @@ function regionOutlines(regions, buckets) {
   };
 }
 
+async function loadRegionFile() {
+  if (regionsCache) return regionsCache;
+  const data = await window.timeline.regions();
+  if (!data || data.error) return null;
+  regionsCache = data;
+  return data;
+}
+
+/**
+ * Administrative polygons as one FeatureCollection, each carrying the colour of
+ * the country that owns it. Built once and handed to the EUIV style as an inline
+ * source, since the vector tiles have no country shapes of their own.
+ */
+function countryFeatures(regions) {
+  return {
+    type: 'FeatureCollection',
+    features: regions.map((region) => ({
+      type: 'Feature',
+      properties: { color: countryColor(region.a) },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: region.p.map((poly) => poly.map((ring) => {
+          const out = [];
+          for (let i = 0; i < ring.length; i += 2) out.push([ring[i], ring[i + 1]]);
+          out.push(out[0]);
+          return out;
+        })),
+      },
+    })),
+  };
+}
+
 /**
  * The region file is loaded for one purpose now: tracing administrative borders
  * onto the undiscovered ground. Nothing reveals by region any more.
@@ -294,8 +327,8 @@ async function loadBorders() {
   regionBorders = 'pending';
   status.textContent = `${baseStatus} · tracing borders…`;
 
-  const data = await window.timeline.regions();
-  if (!data || data.error) {
+  const data = await loadRegionFile();
+  if (!data) {
     regionBorders = null;
     status.textContent = `${baseStatus} · borders unavailable`;
     return;
@@ -332,17 +365,23 @@ el('size').addEventListener('input', (e) => {
   applySize();
 });
 
-// The AOE basemap is the Detailed one recoloured, so it is fetched once and
-// rewritten rather than shipped as a second style document.
-let aoeStyle = null;
+// AOE and EUIV are the Detailed style recoloured, so it is fetched once and
+// rewritten rather than shipped as extra style documents.
+const derived = {};
 
 async function styleFor(name) {
-  if (name !== 'aoe') return styleUrl(name);
-  if (!aoeStyle) {
-    const base = await (await fetch(styleUrl('liberty'))).json();
-    aoeStyle = buildAoeStyle(base);
+  if (name !== 'aoe' && name !== 'euiv') return styleUrl(name);
+  if (derived[name]) return derived[name];
+
+  const base = await (await fetch(styleUrl('liberty'))).json();
+  if (name === 'aoe') {
+    derived.aoe = buildAoeStyle(base);
+  } else {
+    const data = await loadRegionFile();
+    if (!data) return styleUrl('liberty');
+    derived.euiv = buildEuivStyle(base, countryFeatures(data.regions));
   }
-  return aoeStyle;
+  return derived[name];
 }
 
 el('labels').addEventListener('change', (e) => {

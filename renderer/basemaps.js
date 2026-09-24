@@ -113,3 +113,91 @@ function buildAoeStyle(base) {
 }
 
 window.buildAoeStyle = buildAoeStyle;
+
+/* ---------- EUIV: a political map ---------- */
+
+/**
+ * A stable colour per country. Hashing the name keeps neighbours from shifting
+ * about between runs, and holding saturation and lightness steady means every
+ * country reads as the same kind of colour -- only the hue changes.
+ */
+function countryColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  const saturation = 58 + (hash >> 9) % 22;   // 58-79%
+  const lightness = 58 + (hash >> 17) % 12;   // 58-69%
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
+/**
+ * Built on the AOE style, with the land repainted by who owns it.
+ *
+ * The tiles carry no country polygons -- only boundary lines -- so the fills
+ * come from the same region file that draws the borders, inserted directly
+ * above the background so everything else still lands on top of them.
+ *
+ * Terrain then stops being green and becomes shading: woodland darkens whatever
+ * colour is underneath and open ground lightens it, so a forest in Poland is
+ * dark Poland rather than green. Water is left alone.
+ */
+function buildEuivStyle(base, countries) {
+  const style = buildAoeStyle(base);
+  style.name = 'EUIV';
+
+  // Neutral ground for anywhere the region file does not cover.
+  const background = style.layers.find((l) => l.id === 'background');
+  if (background) background.paint = { 'background-color': '#cfd3c4' };
+
+  // AOE keeps a faint relief raster to give its flat green some texture. Here
+  // it only greys the political colours down, and the game's map is flat, so
+  // it goes.
+  const relief = style.layers.find((l) => l.id === 'natural_earth');
+  if (relief) relief.layout = { ...(relief.layout || {}), visibility: 'none' };
+
+  style.sources = {
+    ...style.sources,
+    countries: { type: 'geojson', data: countries },
+  };
+
+  // Light enough to read as terrain without dulling the colour underneath.
+  const shading = {
+    landcover_wood: 'rgba(0, 0, 0, 0.17)',
+    park: 'rgba(0, 0, 0, 0.13)',
+    landcover_wetland: 'rgba(0, 0, 0, 0.10)',
+    landcover_grass: 'rgba(255, 255, 255, 0.15)',
+    landcover_sand: 'rgba(255, 255, 255, 0.30)',
+    landcover_ice: 'rgba(255, 255, 255, 0.70)',
+  };
+
+  style.layers = style.layers.map((layer) => (
+    shading[layer.id] && layer.type === 'fill'
+      ? { ...layer, paint: { ...layer.paint, 'fill-color': shading[layer.id], 'fill-opacity': 1 } }
+      : layer
+  ));
+
+  const at = style.layers.findIndex((l) => l.id === 'background') + 1;
+  style.layers.splice(at, 0,
+    {
+      id: 'country_fill',
+      type: 'fill',
+      source: 'countries',
+      paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 1 },
+    },
+    {
+      // Province outlines, as the reference has. Thin and dark enough to divide
+      // the land without competing with the national borders drawn later.
+      id: 'country_outline',
+      type: 'line',
+      source: 'countries',
+      paint: {
+        'line-color': 'rgba(40, 42, 34, 0.45)',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 3, 0.4, 7, 0.8, 12, 1.4],
+      },
+    });
+
+  return style;
+}
+
+window.countryColor = countryColor;
+window.buildEuivStyle = buildEuivStyle;

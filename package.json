@@ -14,7 +14,8 @@
   "devDependencies": {
     "electron": "^40.0.0",
     "electron-builder": "^25.1.8",
-    "maplibre-gl": "^5.6.0"
+    "maplibre-gl": "^5.6.0",
+    "polygon-clipping": "^0.15.7"
   },
   "build": {
     "appId": "dev.local.timeline-map",
