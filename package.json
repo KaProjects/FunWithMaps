@@ -1,6 +1,6 @@
 {
-  "name": "timeline-map",
-  "productName": "Timeline Map",
+  "name": "fun-with-maps",
+  "productName": "Fun with Maps",
   "version": "0.1.0",
   "description": "Plot your Google Maps Timeline export on your own map.",
   "main": "main.js",
@@ -18,7 +18,7 @@
     "polygon-clipping": "^0.15.7"
   },
   "build": {
-    "appId": "dev.local.timeline-map",
+    "appId": "dev.local.fun-with-maps",
     "files": [
       "main.js",
       "preload.js",
@@ -52,6 +52,7 @@
         "deb"
       ],
       "category": "Utility"
-    }
+    },
+    "icon": "build/icon.png"
   }
 }

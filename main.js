@@ -5,6 +5,11 @@ const path = require('path');
 const fs = require('fs');
 const { extractPoints } = require('./parse');
 
+// Without this the menu bar and dock read "Electron" when running from source;
+// a packaged build takes the name from productName instead.
+app.setName('Fun with Maps');
+const ICON = path.join(__dirname, 'build', 'icon.png');
+
 const NAMES = ['Timeline.json', 'timeline.json'];
 
 /**
@@ -71,6 +76,7 @@ function createWindow() {
     minWidth: 640,
     minHeight: 480,
     backgroundColor: '#0d1117',
+    icon: ICON,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
@@ -129,6 +135,12 @@ ipcMain.handle('timeline:pick', async () => {
 });
 
 app.whenReady().then(() => {
+  // Same reason as the name: in development the dock would show Electron's icon.
+  if (!app.isPackaged && app.dock) {
+    try {
+      app.dock.setIcon(ICON);
+    } catch { /* no dock, or the file is missing */ }
+  }
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
