@@ -5,6 +5,8 @@
   --text: #e7ebf0;
   --muted: #98a2b3;
   --dot: #ff3b30;
+  /* The live colour of the plotted dots, which the user can change. */
+  --dots: #ff3b30;
 }
 
 * { box-sizing: border-box; }
@@ -104,8 +106,15 @@ fieldset label .count { margin-left: auto; color: var(--muted); font-variant-num
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--dot);
+  background: var(--dots);
   flex: none;
+}
+
+/* Flights are drawn as lines, so their legend mark is a dash rather than a dot. */
+.swatch.line {
+  width: 11px;
+  height: 2px;
+  border-radius: 1px;
 }
 
 .row {
@@ -118,6 +127,7 @@ fieldset label .count { margin-left: auto; color: var(--muted); font-variant-num
 /* An element-level display beats the user-agent rule for [hidden], so the
    attribute has to be honoured explicitly. */
 .row[hidden] { display: none; }
+.row.check .count { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; }
 
 /* Fixed width and no wrapping: the readout changes on every drag, and anything
    that can reflow makes the whole panel jump while the slider moves. */
@@ -132,13 +142,40 @@ fieldset label .count { margin-left: auto; color: var(--muted); font-variant-num
   font-variant-numeric: tabular-nums;
 }
 
-.row > span { color: var(--muted); flex: none; width: 64px; }
+.row > span { color: var(--muted); flex: none; width: 70px; }
 /* min-width:0 is what keeps the slider from refusing to shrink: a flex item
    defaults to min-width:auto, so the range would hold its intrinsic width and
    shove the readout outside the panel. */
 .row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--dot); }
 .row.check { gap: 7px; }
 .row.check > span { width: auto; }
+
+/* The native colour swatch comes with a thick platform border and inner padding;
+   stripped back it reads as one of the panel's own controls. */
+.row input[type="color"] {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.row input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+.row input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
+
+.mini {
+  flex: none;
+  width: 46px;
+  min-width: 0;
+  padding: 2px 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mini:hover { color: var(--text); }
 
 select {
   flex: 1;

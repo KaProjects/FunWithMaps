@@ -3,7 +3,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { extractPoints } = require('./parse');
+const { extractPoints, extractFlights } = require('./parse');
 
 // Without this the menu bar and dock read "Electron" when running from source;
 // a packaged build takes the name from productName instead.
@@ -52,8 +52,11 @@ function load(file) {
   if (pts.dropped) console.log(`[timeline] excluded ${pts.dropped} points`);
   if (pts.added) console.log(`[timeline] added ${pts.added} points`);
   if (!pts.total) throw new Error('No GPS points found in that file.');
+  const flights = extractFlights(doc, sidecar('exclusions.json'), sidecar('additions.json'));
+  console.log(`[timeline] ${flights.length} flights`);
   return {
     file,
+    flights,
     counts: pts.counts,
     total: pts.total,
     dropped: pts.dropped,

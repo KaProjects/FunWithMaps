@@ -91,5 +91,20 @@
       "time": "2024-09-29T12:20:00+04:00",
       "kind": "visit"
     }
+  ],
+  "flights": [
+    {
+      "from": {
+        "lat": 40.152376,
+        "lng": 44.39935
+      },
+      "to": {
+        "lat": 48.119866,
+        "lng": 16.559826
+      },
+      "start": "2024-09-29T10:30:00+04:00",
+      "end": "2024-09-29T11:55:00+02:00",
+      "note": "Yerevan Zvartnots to Vienna Schwechat. Google recorded nothing between 28 Sep 08:00 and 1 Oct 20:00, so neither endpoint nor the gap survives in the export; the departure is one of the added visits above. Arrival time is the 2,375 km great circle at a 700 km/h block speed."
+    }
   ]
 }

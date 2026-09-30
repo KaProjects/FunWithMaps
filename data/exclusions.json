@@ -247,5 +247,19 @@
       "lng": 8.77859,
       "note": "2022-06-27 path, Gulf of Ajaccio"
     }
+  ],
+  "flights": [
+    {
+      "date": "2016-07-18",
+      "from": {
+        "lat": 43.519538,
+        "lng": 16.4319145
+      },
+      "to": {
+        "lat": 49.1850245,
+        "lng": 16.5995758
+      },
+      "note": "Split flat to Brno flat, 630 km at 324 km/h. Neither end is an airport and there is no such route; the preceding night is a three-hour drive back from Zagreb, so this is the untracked rest of a road journey that Google filled in as FLYING."
+    }
   ]
 }

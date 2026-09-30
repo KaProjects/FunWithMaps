@@ -246,14 +246,19 @@ function compile(gl, vertSrc, fragSrc) {
  *   x,y in Web Mercator 0..1. All are uploaded once; only one is drawn at a time.
  * @param {() => string|null} opts.active which set to reveal with, null for none
  * @param {() => number} opts.radiusMeters how far you can "see" from a point
+ * @param {() => [number, number]} [opts.range] first instance and instance count to
+ *   draw. The point sets are stored in time order, so a year range is one
+ *   contiguous slice and narrowing it only moves the instance offset — no part of
+ *   the 250k-point buffer is re-uploaded when the year slider moves.
  */
-function createFogLayer({ sets, active, radiusMeters, borders }) {
+function createFogLayer({ sets, active, radiusMeters, borders, range }) {
   let pointProgram, quadProgram, patternProgram, meshProgram;
   let cornerBuffer, quadBuffer, pattern;
   const borderBuffers = { region: null, country: null };
   const borderCounts = { region: 0, country: 0 };
   let pendingBorders = null;
   let texture, framebuffer, maskTexture, maskFramebuffer;
+  let posAttrib = -1;
   let fboWidth = 0, fboHeight = 0;
   let map, supported = true;
 
@@ -346,6 +351,7 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
 
       const aCorner = gl.getAttribLocation(pointProgram, 'a_corner');
       const aPos = gl.getAttribLocation(pointProgram, 'a_pos');
+      posAttrib = aPos;
 
       for (const [name, points] of Object.entries(sets)) {
         const buffer = gl.createBuffer();
@@ -364,7 +370,7 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
         gl.vertexAttribDivisor(aPos, 1);
         gl.bindVertexArray(null);
 
-        geometry[name] = { buffer, vao, count: points.length / 2 };
+        geometry[name] = { buffer, vao, count: points.length / 2, first: 0 };
       }
 
       quadBuffer = gl.createBuffer();
@@ -409,6 +415,9 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
 
       const set = geometry[active()];
       if (!set || !set.count) return;
+
+      const [first, count] = range ? range() : [0, set.count];
+      if (!count) return;
       // mainMatrix assumes mercator; under a globe the points would land wrong.
       if ((map.getProjection() || {}).type === 'globe') return;
 
@@ -442,7 +451,14 @@ function createFogLayer({ sets, active, radiusMeters, borders }) {
         gl.uniformMatrix4fv(gl.getUniformLocation(pointProgram, 'u_matrix'), false, matrix);
         gl.uniform1f(gl.getUniformLocation(pointProgram, 'u_radius'), radius);
         gl.bindVertexArray(set.vao);
-        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, set.count);
+        // The offset lives in the VAO, so it only has to be rewritten when the
+        // selected slice actually moves.
+        if (first !== set.first) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, set.buffer);
+          gl.vertexAttribPointer(posAttrib, 2, gl.FLOAT, false, 0, first * 8);
+          set.first = first;
+        }
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
         gl.bindVertexArray(null);
       };
 

@@ -13,6 +13,19 @@ const styleUrl = (name) => `https://tiles.openfreemap.org/styles/${name}`;
 const nf = new Intl.NumberFormat();
 
 const el = (id) => document.getElementById(id);
+
+// toLocaleDateString follows the host locale and hands back 9/29/2024 on this
+// machine, so dates are written out explicitly instead. 24-hour clock to match:
+// an AM/PM time beside a day-first date mixes two conventions.
+const pad = (n) => String(n).padStart(2, '0');
+const formatDate = (ms) => {
+  const d = new Date(ms);
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+};
+const formatDateTime = (ms) => {
+  const d = new Date(ms);
+  return `${formatDate(ms)}, ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
 const panel = el('panel');
 const splash = el('splash');
 const status = el('status');
@@ -31,6 +44,13 @@ let regionBorders = null;
 let regionsCache = null;   // parsed data/regions.json, fetched at most once
 
 let revealMeters = 50000;
+let dotColour = DOT;
+
+// Full extent of the loaded data, and the slice the year sliders select.
+let yearMin = 0, yearMax = 0, yearFrom = 0, yearTo = 0;
+let fogTimes = null;      // timestamps of fogSets.every, ascending
+let flights = null;       // FeatureCollection of great-circle arcs
+let flightsOn = false;
 
 // How far the fog opens around each recorded fix, and the range of the slider.
 const REVEAL_MAX_M = 100000;
@@ -111,6 +131,7 @@ function applyLabels() {
 /** Keep the fog above the basemap, and the dots above the fog. */
 function raiseOverlays() {
   if (map.getLayer('fog')) map.moveLayer('fog');
+  if (map.getLayer('flights')) map.moveLayer('flights');
   for (const kind of KINDS) {
     const id = `pts-${kind.id}`;
     if (map.getLayer(id)) map.moveLayer(id);
@@ -132,10 +153,13 @@ function addLayers() {
       active: () => (fogOn ? 'every' : null),
       radiusMeters: () => revealMeters,
       borders: () => fogOn,
+      range: fogRange,
     });
     map.addLayer(fogLayer);
     if (regionBorders && regionBorders !== 'pending') fogLayer.setBorders(regionBorders);
   }
+
+  const filter = yearFilter();
 
   for (const kind of KINDS) {
     const src = `pts-${kind.id}`;
@@ -147,15 +171,186 @@ function addLayers() {
       source: src,
       layout: { visibility: el(`chk-${kind.id}`).checked ? 'visible' : 'none' },
       paint: {
-        'circle-color': DOT,
+        'circle-color': dotColour,
         'circle-radius': radius(kind.factor),
         'circle-opacity': opacity,
         'circle-blur': 0.15,
       },
     });
+    // A layer spec rejects `filter: null`, so the whole-span case is set after.
+    if (filter) map.setFilter(src, filter);
+  }
+
+  if (flights && !map.getSource('flights')) {
+    map.addSource('flights', { type: 'geojson', data: flights });
+    map.addLayer({
+      id: 'flights',
+      type: 'line',
+      source: 'flights',
+      layout: {
+        visibility: flightsOn ? 'visible' : 'none',
+        'line-cap': 'round',
+        'line-join': 'round',
+      },
+      paint: {
+        'line-color': dotColour,
+        'line-opacity': 0.9,
+        // A dashed arc reads as a route rather than as something recorded on
+        // the ground, which is the honest way to draw an interpolated path.
+        'line-dasharray': [2, 1.6],
+        'line-width': ['interpolate', ['linear'], ['zoom'], 0, 1.4, 5, 2.2, 12, 3.2],
+      },
+    });
+    if (filter) map.setFilter('flights', filter);
   }
 
   raiseOverlays();
+}
+
+/* ---------- flights ---------- */
+
+/**
+ * Sample the great circle between two points. Google records a flight as its two
+ * endpoints and nothing in between -- `distanceMeters` tracks the great circle
+ * almost exactly, so the path was interpolated rather than flown-and-logged. The
+ * arc here is therefore our own drawing of the route, which is at least the shape
+ * an aircraft actually takes.
+ */
+function greatCircleArc(from, to, steps = 96) {
+  const rad = Math.PI / 180;
+  const [lat1, lng1] = [from[0] * rad, from[1] * rad];
+  const [lat2, lng2] = [to[0] * rad, to[1] * rad];
+  const d = 2 * Math.asin(Math.min(1, Math.sqrt(
+    Math.sin((lat2 - lat1) / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin((lng2 - lng1) / 2) ** 2,
+  )));
+  const line = [];
+  if (!d) return [[from[1], from[0]], [to[1], to[0]]];
+
+  let previous = null;
+  for (let i = 0; i <= steps; i++) {
+    const f = i / steps;
+    const a = Math.sin((1 - f) * d) / Math.sin(d);
+    const b = Math.sin(f * d) / Math.sin(d);
+    const x = a * Math.cos(lat1) * Math.cos(lng1) + b * Math.cos(lat2) * Math.cos(lng2);
+    const y = a * Math.cos(lat1) * Math.sin(lng1) + b * Math.cos(lat2) * Math.sin(lng2);
+    const z = a * Math.sin(lat1) + b * Math.sin(lat2);
+    let lng = Math.atan2(y, x) / rad;
+    const lat = Math.atan2(z, Math.sqrt(x * x + y * y)) / rad;
+    // Long routes cross the antimeridian, where the longitude flips sign. Left
+    // alone the arc would be drawn back across the entire map, so keep the run
+    // continuous by letting it run past +/-180 instead.
+    if (previous !== null) lng -= Math.round((lng - previous) / 360) * 360;
+    previous = lng;
+    line.push([lng, lat]);
+  }
+  return line;
+}
+
+function buildFlights(list) {
+  return {
+    type: 'FeatureCollection',
+    features: (list || []).map((f) => ({
+      type: 'Feature',
+      properties: { t: f.start, km: Math.round(f.km), inferred: !!f.inferred, added: !!f.added },
+      geometry: { type: 'LineString', coordinates: greatCircleArc(f.from, f.to) },
+    })),
+  };
+}
+
+/** Says where a flight came from when it was not simply Google's own label. */
+function flightNote(properties) {
+  if (properties.added) return ' · added';
+  if (properties.inferred) return ' · inferred';
+  return '';
+}
+
+function applyFlights() {
+  if (!map.getLayer('flights')) return;
+  map.setLayoutProperty('flights', 'visibility', flightsOn ? 'visible' : 'none');
+}
+
+
+function applyDotColour() {
+  for (const kind of KINDS) {
+    const id = `pts-${kind.id}`;
+    if (map.getLayer(id)) map.setPaintProperty(id, 'circle-color', dotColour);
+  }
+  if (map.getLayer('flights')) map.setPaintProperty('flights', 'line-color', dotColour);
+  // Keeps the legend swatches in the Layers box showing the real dot colour.
+  document.documentElement.style.setProperty('--dots', dotColour);
+}
+
+/* ---------- years ---------- */
+
+const yearStart = (y) => new Date(y, 0, 1).getTime();
+
+/** Read the span out of the data itself, so a re-export with new years just works. */
+function buildYears() {
+  if (!fogTimes || !fogTimes.length) return;
+  yearMin = new Date(fogTimes[0]).getFullYear();
+  yearMax = new Date(fogTimes[fogTimes.length - 1]).getFullYear();
+  yearFrom = yearMin;
+  yearTo = yearMax;
+  for (const [id, value] of [['year-from', yearFrom], ['year-to', yearTo]]) {
+    const input = el(id);
+    input.min = String(yearMin);
+    input.max = String(yearMax);
+    input.value = String(value);
+  }
+  showYears();
+}
+
+function showYears() {
+  el('year-from-value').textContent = yearMin ? String(yearFrom) : '\u2014';
+  el('year-to-value').textContent = yearMin ? String(yearTo) : '\u2014';
+}
+
+const wholeSpan = () => !yearMin || (yearFrom === yearMin && yearTo === yearMax);
+
+/** null for the whole span, so MapLibre can skip the per-feature test entirely. */
+function yearFilter() {
+  if (wholeSpan()) return null;
+  return ['all',
+    ['>=', ['get', 't'], yearStart(yearFrom)],
+    ['<', ['get', 't'], yearStart(yearTo + 1)],
+  ];
+}
+
+/** First index at or after `t` in an ascending array. */
+function lowerBound(times, t) {
+  let lo = 0, hi = times.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (times[mid] < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/**
+ * [first instance, instance count] for the selected years. fogSets.every is
+ * time-ordered, so the selection is one contiguous slice and the fog never has
+ * to re-upload its buffer while the slider moves.
+ */
+function fogRange() {
+  if (!fogTimes) return [0, 0];
+  if (wholeSpan()) return [0, fogTimes.length];
+  const first = lowerBound(fogTimes, yearStart(yearFrom));
+  return [first, lowerBound(fogTimes, yearStart(yearTo + 1)) - first];
+}
+
+function applyYears() {
+  const filter = yearFilter();
+  for (const kind of KINDS) {
+    const id = `pts-${kind.id}`;
+    if (map.getLayer(id)) map.setFilter(id, filter);
+  }
+  if (map.getLayer('flights')) map.setFilter('flights', filter);
+  showYears();
+  showTotal();
+  showStatus();
+  map.triggerRepaint();
 }
 
 function applySize() {
@@ -346,23 +541,70 @@ async function loadBorders() {
 
 /* ---------- panel ---------- */
 
-function buildPanel(counts) {
+function buildPanel(counts, flightCount) {
   const box = el('kinds');
   box.querySelectorAll('label').forEach((n) => n.remove());
-  for (const kind of KINDS) {
+
+  const row = (id, swatch, text, count) => {
     const label = document.createElement('label');
     label.innerHTML =
-      `<input type="checkbox" id="chk-${kind.id}" checked />` +
-      `<span class="swatch"></span><span>${kind.label}</span>` +
-      `<span class="count">${nf.format(counts[kind.id] || 0)}</span>`;
+      `<input type="checkbox" id="${id}" />` +
+      `<span class="swatch ${swatch}"></span><span>${text}</span>` +
+      `<span class="count">${nf.format(count || 0)}</span>`;
     box.appendChild(label);
-    label.querySelector('input').addEventListener('change', applyDotVisibility);
+    return label.querySelector('input');
+  };
+
+  for (const kind of KINDS) {
+    const input = row(`chk-${kind.id}`, '', kind.label, counts[kind.id]);
+    input.checked = true;
+    input.addEventListener('change', applyDotVisibility);
   }
+
+  // Flights are a layer like the rest, so they belong in the same box -- drawn
+  // from the same points, in the same colour, just joined up instead of plotted.
+  const input = row('flights', 'line', 'Flights', flightCount);
+  input.checked = flightsOn;
+  input.disabled = !flightCount;
+  input.addEventListener('change', (e) => {
+    flightsOn = e.target.checked;
+    applyFlights();
+  });
 }
 
 el('size').addEventListener('input', (e) => {
   size = Number(e.target.value);
   applySize();
+});
+
+el('dot-colour').addEventListener('input', (e) => {
+  dotColour = e.target.value;
+  applyDotColour();
+});
+
+el('dot-reset').addEventListener('click', () => {
+  dotColour = DOT;
+  el('dot-colour').value = DOT;
+  applyDotColour();
+});
+
+// The two handles cannot cross: whichever is dragged pushes the other along.
+el('year-from').addEventListener('input', (e) => {
+  yearFrom = Number(e.target.value);
+  if (yearFrom > yearTo) {
+    yearTo = yearFrom;
+    el('year-to').value = String(yearTo);
+  }
+  applyYears();
+});
+
+el('year-to').addEventListener('input', (e) => {
+  yearTo = Number(e.target.value);
+  if (yearTo < yearFrom) {
+    yearFrom = yearTo;
+    el('year-from').value = String(yearFrom);
+  }
+  applyYears();
 });
 
 // AOE and EUIV are the Detailed style recoloured, so it is fetched once and
@@ -415,10 +657,27 @@ function setFog(on) {
   map.triggerRepaint();
 }
 
+/**
+ * The reveal count used to live here, but the total line above already reports
+ * exactly the same figure, and a status that gains or loses a wrapped row as the
+ * digits change resizes the panel while the year sliders move.
+ */
 function showStatus() {
-  status.textContent = fogOn
-    ? `${baseStatus} · ${nf.format(fogPoints)} reveal points`
-    : baseStatus;
+  status.textContent = baseStatus;
+}
+
+/**
+ * The selected count lives on this line rather than in the status text, which is
+ * already long enough that one more clause wraps it — and a status line that
+ * gains a row mid-drag resizes the whole panel.
+ */
+function showTotal() {
+  if (wholeSpan()) {
+    el('total').textContent = `${nf.format(fogPoints)} GPS points`;
+    return;
+  }
+  const [, count] = fogRange();
+  el('total').textContent = `${nf.format(count)} of ${nf.format(fogPoints)} points`;
 }
 
 function applyDotVisibility() {
@@ -443,6 +702,8 @@ el('reveal').addEventListener('input', (e) => {
   showReveal();
   map.triggerRepaint();
 });
+
+
 
 el('globe').addEventListener('change', (e) => {
   projection = e.target.checked ? 'globe' : 'mercator';
@@ -472,11 +733,25 @@ el('splash-open').addEventListener('click', pickFile);
 
 map.on('click', (e) => {
   const layers = KINDS.map((k) => `pts-${k.id}`).filter((id) => map.getLayer(id));
+  if (flightsOn && map.getLayer('flights')) layers.push('flights');
   const hits = map.queryRenderedFeatures(e.point, { layers });
   if (!hits.length) return;
   const f = hits[0];
+
+  if (f.layer.id === 'flights') {
+    const when = formatDate(f.properties.t);
+    new maplibregl.Popup({ closeButton: false, offset: 8 })
+      .setLngLat(e.lngLat)
+      .setHTML(
+        `<strong>Flight</strong><br>${when}<br>`
+        + `<code>${nf.format(f.properties.km)} km${flightNote(f.properties)}</code>`
+      )
+      .addTo(map);
+    return;
+  }
+
   const kind = KINDS.find((k) => `pts-${k.id}` === f.layer.id);
-  const when = f.properties.t ? new Date(f.properties.t).toLocaleString() : 'unknown time';
+  const when = f.properties.t ? formatDateTime(f.properties.t) : 'unknown time';
   const [lng, lat] = f.geometry.coordinates;
   new maplibregl.Popup({ closeButton: false, offset: 8 })
     .setLngLat(f.geometry.coordinates)
@@ -519,11 +794,22 @@ function buildCollections(payload) {
 
   // Every recorded fix, whatever its kind. No bridging: the movement trails are
   // already continuous, so there are no gaps to fill.
+  //
+  // Stored in time order, which makes any year range one contiguous slice of the
+  // buffer: fog.js then narrows to a range by moving the instance offset instead
+  // of re-uploading a quarter of a million points on every slider tick.
+  const order = new Uint32Array(lat.length);
+  for (let i = 0; i < order.length; i++) order[i] = i;
+  order.sort((a, b) => time[a] - time[b]);
+
   const every = new Float32Array(lat.length * 2);
-  for (let i = 0; i < lat.length; i++) {
+  fogTimes = new Float64Array(lat.length);
+  for (let k = 0; k < order.length; k++) {
+    const i = order[k];
     const m = maplibregl.MercatorCoordinate.fromLngLat([lng[i], lat[i]]);
-    every[i * 2] = m.x;
-    every[i * 2 + 1] = m.y;
+    every[k * 2] = m.x;
+    every[k * 2 + 1] = m.y;
+    fogTimes[k] = time[i];
   }
 
   fogSets = { every };
@@ -535,7 +821,10 @@ function buildCollections(payload) {
 
 function show(payload) {
   collections = buildCollections(payload);
-  buildPanel(payload.counts);
+  flights = buildFlights(payload.flights);
+  buildPanel(payload.counts, flights.features.length);
+  buildYears();
+  applyDotColour();
 
   if (styleReady) {
     addLayers();
@@ -544,7 +833,7 @@ function show(payload) {
 
   splash.hidden = true;
   panel.hidden = false;
-  el('total').textContent = `${nf.format(payload.total)} GPS points`;
+  showTotal();
   baseStatus = `${payload.file.split(/[/\\]/).pop()} · parsed in ${payload.ms} ms`
     + (payload.dropped ? ` · ${nf.format(payload.dropped)} excluded` : '')
     + (payload.added ? ` · ${nf.format(payload.added)} added` : '');

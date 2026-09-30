@@ -28,9 +28,27 @@
     </fieldset>
 
     <label class="row">
+      <span>From</span>
+      <input id="year-from" type="range" min="2000" max="2100" step="1" value="2000" />
+      <output id="year-from-value" class="value">&mdash;</output>
+    </label>
+
+    <label class="row">
+      <span>To</span>
+      <input id="year-to" type="range" min="2000" max="2100" step="1" value="2100" />
+      <output id="year-to-value" class="value">&mdash;</output>
+    </label>
+
+    <label class="row">
       <span>Dot size</span>
       <input id="size" type="range" min="0.4" max="3" step="0.1" value="1" />
     </label>
+
+    <div class="row">
+      <span>Dot colour</span>
+      <input id="dot-colour" type="color" value="#ff3b30" />
+      <button id="dot-reset" class="mini" type="button" title="Back to red">Reset</button>
+    </div>
 
     <label class="row">
       <span>Basemap</span>
